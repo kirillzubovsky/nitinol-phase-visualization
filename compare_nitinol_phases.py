@@ -16,18 +16,23 @@ import numpy as np
 
 # Shared visualization parameters - ensures both structures are always identical
 SHARED_PARAMS = {
-    'num_atoms': 32,           # Total atoms in each structure
-    'repetitions_b2': (2, 2, 4),   # How to repeat B2 unit cell
-    'repetitions_b19': (2, 2, 2),  # How to repeat B19' unit cell
+    'num_atoms': 32,           # Target atom count - BOTH structures must have this exact number
+    'repetitions_b2': (2, 2, 4),   # B2 repetitions: 2*2*4 unit cells * 2 atoms/cell = 32 atoms
+    'repetitions_b19': (2, 2, 2),  # B19' repetitions: 2*2*2 unit cells * 4 atoms/cell = 32 atoms
     'initial_view': {
-        'elev': 20,            # Initial elevation angle
-        'azim': 45             # Initial azimuth angle
+        'elev': 20,            # Initial elevation angle (degrees)
+        'azim': 45             # Initial azimuth angle (degrees)
     },
     'bond_distance': 3.2,      # Maximum bond distance in Angstroms
     'atom_size': 300,          # Size of atom spheres
     'bond_width': 1.5,         # Width of bond lines
-    'bond_alpha': 0.4          # Transparency of bonds
+    'bond_alpha': 0.4          # Transparency of bonds (0=transparent, 1=opaque)
 }
+
+# Note: B2 has 2 atoms per unit cell, B19' has 4 atoms per unit cell
+# To maintain equal atom counts, adjust repetitions accordingly:
+# B2 atoms = repetitions_b2[0] * repetitions_b2[1] * repetitions_b2[2] * 2
+# B19 atoms = repetitions_b19[0] * repetitions_b19[1] * repetitions_b19[2] * 4
 
 def create_b2_austenite():
     """
@@ -193,6 +198,22 @@ def visualize_comparison():
     cell_params = b19.cell.cellpar()
     print(f"  Cell parameters: a={cell_params[0]:.3f} Å, b={cell_params[1]:.3f} Å, c={cell_params[2]:.3f} Å")
     print(f"  Monoclinic angle β={cell_params[4]:.1f}°")
+
+    # Validate that both structures have the same number of atoms
+    if len(b2) != len(b19):
+        raise ValueError(
+            f"ERROR: Atom count mismatch! B2 has {len(b2)} atoms but B19' has {len(b19)} atoms.\n"
+            f"Both structures must have exactly {SHARED_PARAMS['num_atoms']} atoms.\n"
+            f"Please adjust repetitions_b2 or repetitions_b19 in SHARED_PARAMS."
+        )
+
+    if len(b2) != SHARED_PARAMS['num_atoms']:
+        raise ValueError(
+            f"ERROR: Atom count mismatch! Structures have {len(b2)} atoms but SHARED_PARAMS specifies {SHARED_PARAMS['num_atoms']}.\n"
+            f"Please adjust repetitions to match num_atoms in SHARED_PARAMS."
+        )
+
+    print(f"\n✓ Validation passed: Both structures have exactly {len(b2)} atoms")
 
     # Create figure with two subplots and space for controls
     fig = plt.figure(figsize=(17, 7))
