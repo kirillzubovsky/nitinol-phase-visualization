@@ -2,6 +2,10 @@
 """
 Nitinol Phase Comparison Visualization
 Shows B2 austenite and B19' martensite structures side by side
+
+All visualization parameters are locked in SHARED_PARAMS to ensure both
+structures are always displayed consistently. To change how the structures
+look, modify the values in SHARED_PARAMS at the top of the file.
 """
 
 from ase import Atoms
@@ -9,6 +13,21 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.widgets import CheckButtons
 import numpy as np
+
+# Shared visualization parameters - ensures both structures are always identical
+SHARED_PARAMS = {
+    'num_atoms': 32,           # Total atoms in each structure
+    'repetitions_b2': (2, 2, 4),   # How to repeat B2 unit cell
+    'repetitions_b19': (2, 2, 2),  # How to repeat B19' unit cell
+    'initial_view': {
+        'elev': 20,            # Initial elevation angle
+        'azim': 45             # Initial azimuth angle
+    },
+    'bond_distance': 3.2,      # Maximum bond distance in Angstroms
+    'atom_size': 300,          # Size of atom spheres
+    'bond_width': 1.5,         # Width of bond lines
+    'bond_alpha': 0.4          # Transparency of bonds
+}
 
 def create_b2_austenite():
     """
@@ -31,8 +50,8 @@ def create_b2_austenite():
                cell=cell,
                pbc=True)
 
-    # Repeat to show crystal structure better
-    b2 = b2.repeat((2, 2, 2))
+    # Use shared repetition parameters
+    b2 = b2.repeat(SHARED_PARAMS['repetitions_b2'])
 
     return b2
 
@@ -70,8 +89,8 @@ def create_b19_martensite():
                 cell=cell,
                 pbc=True)
 
-    # Repeat to show structure
-    b19 = b19.repeat((2, 2, 2))
+    # Use shared repetition parameters
+    b19 = b19.repeat(SHARED_PARAMS['repetitions_b19'])
 
     return b19
 
@@ -83,8 +102,8 @@ def plot_structure(atoms, ax, title):
     symbols = atoms.get_chemical_symbols()
 
     # Draw bonds first (so they appear behind atoms)
-    # Define maximum bond distance (slightly larger than nearest neighbor)
-    max_bond_distance = 3.2  # Angstroms - covers typical Ti-Ni bonds
+    # Use shared bond parameters
+    max_bond_distance = SHARED_PARAMS['bond_distance']
 
     for i in range(len(positions)):
         for j in range(i + 1, len(positions)):
@@ -95,21 +114,23 @@ def plot_structure(atoms, ax, title):
                 # Draw bond as a line
                 bond_points = np.array([positions[i], positions[j]])
                 ax.plot3D(bond_points[:, 0], bond_points[:, 1], bond_points[:, 2],
-                         'gray', linewidth=1.5, alpha=0.4, zorder=1)
+                         'gray', linewidth=SHARED_PARAMS['bond_width'],
+                         alpha=SHARED_PARAMS['bond_alpha'], zorder=1)
 
     # Separate Ti and Ni atoms
     ti_pos = positions[np.array(symbols) == 'Ti']
     ni_pos = positions[np.array(symbols) == 'Ni']
 
     # Plot atoms (with higher zorder so they appear on top of bonds)
+    # Use shared atom size parameter
     if len(ti_pos) > 0:
         ax.scatter(ti_pos[:, 0], ti_pos[:, 1], ti_pos[:, 2],
-                  c='silver', s=300, alpha=0.9, edgecolors='black',
+                  c='silver', s=SHARED_PARAMS['atom_size'], alpha=0.9, edgecolors='black',
                   linewidths=1.5, label='Ti', zorder=3)
 
     if len(ni_pos) > 0:
         ax.scatter(ni_pos[:, 0], ni_pos[:, 1], ni_pos[:, 2],
-                  c='gold', s=300, alpha=0.9, edgecolors='black',
+                  c='gold', s=SHARED_PARAMS['atom_size'], alpha=0.9, edgecolors='black',
                   linewidths=1.5, label='Ni', zorder=3)
 
     # Draw unit cell
@@ -184,6 +205,12 @@ def visualize_comparison():
     ax2 = fig.add_subplot(122, projection='3d')
     plot_structure(b19, ax2, "B19' Martensite (Low Temperature)\nMonoclinic - Deformable Phase")
 
+    # Set both to the same initial viewing angle using shared parameters
+    ax1.view_init(elev=SHARED_PARAMS['initial_view']['elev'],
+                  azim=SHARED_PARAMS['initial_view']['azim'])
+    ax2.view_init(elev=SHARED_PARAMS['initial_view']['elev'],
+                  azim=SHARED_PARAMS['initial_view']['azim'])
+
     plt.suptitle('Nitinol Crystal Structure Comparison',
                 fontsize=16, fontweight='bold', y=0.98)
 
@@ -192,10 +219,6 @@ def visualize_comparison():
     ax_check = plt.axes([0.02, 0.02, 0.15, 0.15])
     check = CheckButtons(ax_check, ['Lock Rotation', 'Show Grid', 'Show Legends'],
                         [False, True, True])
-
-    # Store initial view angles
-    initial_elev = ax1.elev
-    initial_azim = ax1.azim
 
     # Track checkbox states
     state = {
