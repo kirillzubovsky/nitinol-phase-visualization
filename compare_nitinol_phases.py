@@ -7,6 +7,7 @@ Shows B2 austenite and B19' martensite structures side by side
 from ase import Atoms
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.widgets import CheckButtons
 import numpy as np
 
 def create_b2_austenite():
@@ -76,25 +77,40 @@ def create_b19_martensite():
 
 def plot_structure(atoms, ax, title):
     """
-    Plot atomic structure on given matplotlib axis
+    Plot atomic structure on given matplotlib axis with bonds
     """
     positions = atoms.get_positions()
     symbols = atoms.get_chemical_symbols()
+
+    # Draw bonds first (so they appear behind atoms)
+    # Define maximum bond distance (slightly larger than nearest neighbor)
+    max_bond_distance = 3.2  # Angstroms - covers typical Ti-Ni bonds
+
+    for i in range(len(positions)):
+        for j in range(i + 1, len(positions)):
+            distance = np.linalg.norm(positions[i] - positions[j])
+
+            # Only draw bonds between nearest neighbors
+            if distance < max_bond_distance:
+                # Draw bond as a line
+                bond_points = np.array([positions[i], positions[j]])
+                ax.plot3D(bond_points[:, 0], bond_points[:, 1], bond_points[:, 2],
+                         'gray', linewidth=1.5, alpha=0.4, zorder=1)
 
     # Separate Ti and Ni atoms
     ti_pos = positions[np.array(symbols) == 'Ti']
     ni_pos = positions[np.array(symbols) == 'Ni']
 
-    # Plot atoms
+    # Plot atoms (with higher zorder so they appear on top of bonds)
     if len(ti_pos) > 0:
         ax.scatter(ti_pos[:, 0], ti_pos[:, 1], ti_pos[:, 2],
-                  c='silver', s=300, alpha=0.8, edgecolors='black',
-                  linewidths=1, label='Ti')
+                  c='silver', s=300, alpha=0.9, edgecolors='black',
+                  linewidths=1.5, label='Ti', zorder=3)
 
     if len(ni_pos) > 0:
         ax.scatter(ni_pos[:, 0], ni_pos[:, 1], ni_pos[:, 2],
-                  c='gold', s=300, alpha=0.8, edgecolors='black',
-                  linewidths=1, label='Ni')
+                  c='gold', s=300, alpha=0.9, edgecolors='black',
+                  linewidths=1.5, label='Ni', zorder=3)
 
     # Draw unit cell
     cell = atoms.get_cell()
@@ -143,7 +159,7 @@ def plot_structure(atoms, ax, title):
     ax.view_init(elev=20, azim=45)
 
 def visualize_comparison():
-    """Create side-by-side comparison of B2 and B19' phases"""
+    """Create side-by-side comparison of B2 and B19' phases with interactive controls"""
 
     print("Creating B2 austenite structure...")
     b2 = create_b2_austenite()
@@ -157,8 +173,8 @@ def visualize_comparison():
     print(f"  Cell parameters: a={cell_params[0]:.3f} Å, b={cell_params[1]:.3f} Å, c={cell_params[2]:.3f} Å")
     print(f"  Monoclinic angle β={cell_params[4]:.1f}°")
 
-    # Create figure with two subplots
-    fig = plt.figure(figsize=(16, 7))
+    # Create figure with two subplots and space for controls
+    fig = plt.figure(figsize=(17, 7))
 
     # B2 Austenite
     ax1 = fig.add_subplot(121, projection='3d')
@@ -171,7 +187,69 @@ def visualize_comparison():
     plt.suptitle('Nitinol Crystal Structure Comparison',
                 fontsize=16, fontweight='bold', y=0.98)
 
-    plt.tight_layout()
+    # Add interactive controls
+    # Create checkbox area at the bottom
+    ax_check = plt.axes([0.02, 0.02, 0.15, 0.15])
+    check = CheckButtons(ax_check, ['Lock Rotation', 'Show Grid', 'Show Legends'],
+                        [False, True, True])
+
+    # Store initial view angles
+    initial_elev = ax1.elev
+    initial_azim = ax1.azim
+
+    # Track checkbox states
+    state = {
+        'lock_rotation': False,
+        'show_grid': True,
+        'show_legends': True
+    }
+
+    def on_checkbox_clicked(label):
+        """Handle checkbox clicks"""
+        if label == 'Lock Rotation':
+            state['lock_rotation'] = not state['lock_rotation']
+            if state['lock_rotation']:
+                # Sync the views
+                ax2.view_init(elev=ax1.elev, azim=ax1.azim)
+                fig.canvas.draw_idle()
+
+        elif label == 'Show Grid':
+            state['show_grid'] = not state['show_grid']
+            # Toggle grid, axes, and panes
+            for ax in [ax1, ax2]:
+                ax.grid(state['show_grid'])
+                ax.set_axis_on() if state['show_grid'] else ax.set_axis_off()
+                # Toggle panes
+                ax.xaxis.pane.set_visible(state['show_grid'])
+                ax.yaxis.pane.set_visible(state['show_grid'])
+                ax.zaxis.pane.set_visible(state['show_grid'])
+            fig.canvas.draw_idle()
+
+        elif label == 'Show Legends':
+            state['show_legends'] = not state['show_legends']
+            for ax in [ax1, ax2]:
+                legend = ax.get_legend()
+                if legend:
+                    legend.set_visible(state['show_legends'])
+            fig.canvas.draw_idle()
+
+    check.on_clicked(on_checkbox_clicked)
+
+    # Store the original motion_notify_event handler
+    def on_move(event):
+        """Synchronize rotation when locked"""
+        if state['lock_rotation'] and event.inaxes in [ax1, ax2]:
+            # Get the view angles from the active axis
+            if event.inaxes == ax1:
+                ax2.view_init(elev=ax1.elev, azim=ax1.azim)
+            elif event.inaxes == ax2:
+                ax1.view_init(elev=ax2.elev, azim=ax2.azim)
+            fig.canvas.draw_idle()
+
+    # Connect the motion event
+    fig.canvas.mpl_connect('motion_notify_event', on_move)
+
+    plt.tight_layout(rect=[0, 0.05, 1, 0.96])
 
     # Save figure
     output_file = 'nitinol_phase_comparison.png'
@@ -180,6 +258,10 @@ def visualize_comparison():
 
     # Show interactive plot
     print("Displaying interactive comparison...")
+    print("\nControls:")
+    print("  - Lock Rotation: Synchronize rotation of both structures")
+    print("  - Show Grid: Toggle 3D grid and axes")
+    print("  - Show Legends: Toggle atom type legends")
     plt.show()
 
 if __name__ == "__main__":
